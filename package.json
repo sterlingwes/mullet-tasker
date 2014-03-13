@@ -1,0 +1,9 @@
+{
+    "name": "mullet tasker",
+    "version": "0.0.0",
+    "dependencies": {
+        "gulp": ""
+    },
+    "description": "",
+    "main": "main.js"
+}
