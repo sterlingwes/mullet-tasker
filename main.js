@@ -42,6 +42,8 @@ module.exports = function(config) {
         this.reload = tinylr();
     }
     
+    Tasker.prototype.gulp = gulp;
+    
     /*
      * Tasker.compile() - compiles a webpack app based on the webpack.config.js file
      * 
@@ -83,7 +85,7 @@ module.exports = function(config) {
         this.add( 'webpack-dist' , function() {
             
             return gulp.src( this.app.base + '/build/**/*' )
-                    .pipe( this.pipeOut( this.sharepath ) );
+                    .pipe( this.dest( this.sharepath ) );
             
         }.bind(this) );
         
@@ -139,9 +141,7 @@ module.exports = function(config) {
                     stream.push( typeof method === 'function' ? method() : method );
                 });
 
-                _.each(this.destpaths, function(dest) {
-                    stream.push( this.pipeOut(dest) );
-                }.bind(this));
+                [].push.apply(stream, this.pipeTo() );
                 
                 stream = Combine.apply(Combine, stream);
                 stream.on('error', function(err) {
@@ -159,21 +159,35 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.pipeOut - convenience for sending files to their app's public place
-     * 
-     * TODO: case where this.destpaths is not an array invalid? Refactor, otherwise just an internal func
+     * Tasker.pipeTo - convenience for sending files to their app's public place. To be user with Combiner
      * 
      * - override, string or array[string]. If specified, acts just like gulp.dest()
+     * 
+     * returns array of gulp.dest calls for Combine to add to stream
      */
-    Tasker.prototype.pipeOut = function(override) {
+    Tasker.prototype.pipeTo = function(override) {
         
         if(!override && (!this.destpaths || !this.destpaths.length) )
-            return console.error('! Tasker.pipeOut() Error: app has no vhost specified or no destination override.');
+            return console.error('! Tasker.pipeTo() Error: app has no vhost specified or no destination override.');
         
-        return override 
-                    ? gulp.dest(override) 
-                    : ( !_.isArray(this.destpaths) ? gulp.dest(this.destpaths) : false );
+        if(override && !_.isArray(override))
+            override = [ override ];
         
+        var out = override || this.destpaths;
+        
+        return _.map(out, function(path) {
+            return gulp.dest(path);
+        });
+        
+    };
+    
+    /*
+     * Tasker.dest() - proxy for gulp.dest to maintain tasker chainability
+     * 
+     * - path, string or array[string] of paths to write to
+     */
+    Tasker.prototype.dest = function(path) {
+        return gulp.dest(path);
     };
     
     /*
@@ -259,13 +273,15 @@ module.exports = function(config) {
         var dests = destination ? [ destination ] : this.destpaths
           , promises = [];
             
-        promises.push(new RSVP(function(resolve, reject) {
-              
-            fs.writeFile(destpath, this.jade, function(err) {
-                if(typeof cb === 'function')
-                    cb(err, this.jade);
-            });
-        }));
+        _.each(dests, function(destpath) {
+            promises.push(new RSVP.Promise(function(resolve, reject) {
+
+                fs.writeFile(destpath + '/' + name, data, function(err) {
+                    if(err) reject(err);
+                    else    resolve(data);
+                });
+            }));
+        });
         
         return RSVP.all(promises);
     };
