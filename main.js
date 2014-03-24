@@ -228,14 +228,16 @@ module.exports = function(config) {
         
         this.tasks.push(function(err) {
             if(err) return console.error(err);
-            
-            this.reload.listen(port, function(err) {
-                
-                if(err) return console.error(err);
-                console.log( '- LiveReload server listening on port ' + port );
-                
-                this.watch();
-            }.bind(this));
+
+			if(!config.isTesting) {
+				this.reload.listen(port, function(err) {
+					
+					if(err) return console.error(err);
+					console.log( '- LiveReload server listening on port ' + port );
+					
+					this.watch();
+				}.bind(this));
+			}
         }.bind(this));
         
         return this;
