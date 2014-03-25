@@ -36,6 +36,10 @@ module.exports = function(config) {
                 this.destpaths.push( [ config.path , 'public/sites' , host ].join('/') );
              }.bind(this));
         }
+        else // if calling app has no vhost (ie: is not a 'root' app), allow the caller to override app value
+            return function(app) {
+                return new Tasker(app);
+            };
         
         this.sharepath = [ config.path , 'public/assets' , app.name ].join('/');
         
