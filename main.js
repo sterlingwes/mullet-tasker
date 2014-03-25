@@ -6,7 +6,9 @@ var gulp = require('gulp')
   , gaze = require('gaze')
   , Combine = require('stream-combiner')
   , fs = require('fs')
-  , RSVP = require('rsvp');
+  , RSVP = require('rsvp')
+  , mkdirp = require('mkdirp')
+  , pathLib = require('path');
 
 module.exports = function(config) {
     
@@ -277,10 +279,13 @@ module.exports = function(config) {
             
         _.each(dests, function(destpath) {
             promises.push(new RSVP.Promise(function(resolve, reject) {
-
-                fs.writeFile(destpath + '/' + name, data, function(err) {
-                    if(err) reject(err);
-                    else    resolve(data);
+                var writePath = destpath + '/' + name;
+                mkdirp(pathLib.dirname(writePath), function(err) {
+                    if(err) return cb(err);
+                    fs.writeFile(writePath, data, function(err) {
+                        if(err) reject(err);
+                        else    resolve(writePath);
+                    });
                 });
             }));
         });
