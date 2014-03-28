@@ -1,3 +1,11 @@
+/*
+ * # Tasker
+ * 
+ * A task runner and resource builder for apps & client side assets. Mainly convenience methods for gulp / dev / test related tasks.
+ * 
+ * @exports {Function} that returns the Tasker prototype
+ */
+
 var gulp = require('gulp')
   , gdbug = require('gulp-debug')
   , tinylr = require('tiny-lr')
@@ -6,23 +14,28 @@ var gulp = require('gulp')
   , gaze = require('gaze')
   , Combine = require('stream-combiner')
   , fs = require('fs')
-  , RSVP = require('rsvp')
+  , Promise = require('es6-promise').Promise
   , mkdirp = require('mkdirp')
-  , pathLib = require('path');
+  , pathLib = require('path')
+  , exec = require('child_process').exec;
 
 module.exports = function(config) {
     
     /*
-     * Tasker - mainly convenience methods for gulp / dev / test related tasks
+     * ## Tasker.constructor()
      * 
-     * - app, object of properties for calling app, has:
-     *      + mtime (date)
-     *      + name (string)
-     *      + core (boolean)
-     *      + base (string) - absolute to parent app folder
-     *      + main (function) - already called onLoad, should not be called again
-     *      + info (object) - package.json
-     *      + deps (array[string])
+     * Instantiated by the Mullet runtime if the "owner" app is an entry app. Otherwise, the dependent app must instantiate.
+     * 
+     * @param {Object} app properties for the dependent app, which has:
+     *      - mtime (date)
+     *      - name (string)
+     *      - core (boolean)
+     *      - base (string) - absolute to parent app folder
+     *      - main (function) - already called onLoad, should not be called again
+     *      - info (object) - package.json
+     *      - deps (array[string])
+     * 
+     * @return {Function|Object} function that takes `app` properties or object instance of Tasker
      */
     function Tasker(app) {
         
@@ -48,12 +61,68 @@ module.exports = function(config) {
         this.reload = tinylr();
     }
     
+    Tasker.prototype.instantiate = true;
+    
     Tasker.prototype.gulp = gulp;
     
     /*
-     * Tasker.compile() - compiles a webpack app based on the webpack.config.js file
+     * ## Tasker.compileLocal()
      * 
-     * - aug, object that augments the webpack config (overwrites)
+     * Compiles a webpack app based on default config, and writes the bundle locally to public/sites
+     * 
+     * @return {Object} Promise
+     */
+    Tasker.prototype.compileLocal = function() {
+        
+        var webpconfig = {
+            cache:  false,
+            context: this.app.base,
+            entry:  './build/prebuild/bootstrap.js',
+            output: {
+                path:       this.app.base + '/build/postbuild',
+                filename:   'bundle.js'
+            },
+            module: {
+                loaders: [
+                    { test: /\.jsx$/, loader: 'jsx' },
+                    { test: /\.gif/, loader: 'url?limit=10000&mimetype=image/gif' },
+                    { test: /\.less/, loader: 'style!css!less' }
+                ]
+            },
+            resolve: {
+                root:   ['D:/Dev/Vagrant/node_modules', 'D:/Dev/Vagrant/bower_components', 'D:/Dev/Vagrant'],
+                alias: {
+                    libs:       'D:/Dev/Vagrant/mulletapp/libs',
+                    reactjs:    'D:/Dev/Vagrant/mulletapp/node_modules/react/react.js',
+                    fs:         'D:/Dev/Vagrant/mulletapp/libs/fsblock'
+                },
+                modulesDirectories: ['bower_components', 'node_modules', 'apps']
+            }
+        };
+
+        var wpcompiler = webpack(webpconfig);
+
+        return new Promise(function(res,rej) {
+            
+            wpcompiler.run(function(err, stats) {
+                if(err) return rej(err);
+                res();
+            });
+            
+        }).then(function() {
+            
+            this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' );
+            
+        }.bind(this));
+    };
+    
+    /*
+     * ## Tasker.compile()
+     * 
+     * Compiles a webpack app based on the webpack.config.js file (or fair defaults if non provided).
+     * 
+     * @param {Object} aug that augments the webpack config (overwrites)
+     * @return {Object} itself
      */
     Tasker.prototype.compile = function(aug) {
         
@@ -63,8 +132,9 @@ module.exports = function(config) {
             webpconfig = require( this.app.base + '/webpack.config.js' );
         }
         catch(e) {
-            if(e.code == 'MODULE_NOT_FOUND')
+            if(e.code == 'MODULE_NOT_FOUND') {
                 console.warn('! Tasker.compile, no webpack.config.js found in ' + this.app.base );
+            }
             else
                 console.error(err);
         }
@@ -88,9 +158,11 @@ module.exports = function(config) {
             
         });
         
+        // TODO: needs to wait for the app to build before copying dist? Should also handle minimize / optimize here
+        
         this.add( 'webpack-dist' , function() {
             
-            return gulp.src( this.app.base + '/build/**/*' )
+            return gulp.src( this.app.base + ['/build','**','*'].join('/') )
                     .pipe( this.dest( this.sharepath ) );
             
         }.bind(this) );
@@ -100,9 +172,12 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.absoluteSrc() - convert relative glob to absolute app path to src file
+     * ## Tasker.absoluteSrc()
      * 
-     * - globs, string or array[string]
+     * Convert relative path / glob to absolute app path to src file.
+     * 
+     * @param {Array|String} globs
+     * @return {Array} of absolute paths
      */
     Tasker.prototype.absoluteSrc = function( globs ) {
         if(!_.isArray(globs)) globs = [globs];
@@ -113,11 +188,17 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.add() - add a gulp task
+     * ## Tasker.add()
      * 
-     * return instance
+     * Add a gulp task.
+     * 
+     * @return {Object} itself
      */
     Tasker.prototype.add = function() {
+        
+        var lastTask = this.tasks[this.tasks.length-1];
+        if(lastTask && typeof lastTask === 'function')
+            return console.warn(' ! Tasker.add() - live() or watch() should be called after all tasks are add()ed');
         
         var args = Array.prototype.slice.call(arguments, 0)
           , taskName = args[0] = this.app.name + '-' + args[0];
@@ -165,11 +246,12 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.pipeTo - convenience for sending files to their app's public place. To be user with Combiner
+     * ## Tasker.pipeTo 
      * 
-     * - override, string or array[string]. If specified, acts just like gulp.dest()
+     * Convenience for sending files to their app's public place. To be used with Combiner.
      * 
-     * returns array of gulp.dest calls for Combine to add to stream
+     * @param {Array|String} override if specified, acts just like gulp.dest()
+     * @return {Array} of gulp.dest calls for Combine to add to stream
      */
     Tasker.prototype.pipeTo = function(override) {
         
@@ -188,23 +270,33 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.dest() - proxy for gulp.dest to maintain tasker chainability
+     * ## Tasker.dest()
      * 
-     * - path, string or array[string] of paths to write to
+     * Proxy for gulp.dest to maintain tasker chainability.
+     * 
+     * @param {Array|String} path to write to
+     * @return {Object} gulp.dest() return value
      */
     Tasker.prototype.dest = function(path) {
         return gulp.dest(path);
     };
     
     /*
-     * Tasker.watch() - watches stored src maps for file changes. Should not be called with live()
-     *                  TODO: add check to avoid re-running and consider mapping by task name instead of glob src?
+     * ## Tasker.watch() 
+     * 
+     * Watches stored src maps for file changes. Should not be called with live().
      */
     Tasker.prototype.watch = function() {
+        
+        // TODO: consider mapping by task name instead of glob src?
+        
+        if(this.watching)
+            return console.warn(' ! Tasker.watch() called more than once, have you also called live()?');
         
         var taskr = this;
         _.each( this.srcs, function( tasks, glob ) {
             gaze(glob, function(err, watcher) {
+                taskr.watching = true;
                 this.on('all', function(event, filepath) {
 
                     var changedFile = filepath;
@@ -224,9 +316,12 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.live() - starts a liveReload server to listen
+     * ## Tasker.live() 
      * 
-     * - port, number. Specifies location for tinylr to listen. Defaults to 9999
+     * Starts a liveReload server to listen (uses Tasker.watch()). Should be directly before Tasker.run().
+     * 
+     * @param {Number} port specifies location for tinylr to listen. Defaults to 9999
+     * @return {Object} itself
      */
     Tasker.prototype.live = function(port) {
         
@@ -251,29 +346,66 @@ module.exports = function(config) {
     };
     
     /*
-     * Tasker.run()
+     * ## Tasker.run()
      * 
-     * - taskGroup, string
+     * Runs all tasks added with Tasker.add().
+     * 
+     * @param {String} taskGroup optional name of tasks to run
      */
     Tasker.prototype.run = function(taskGroup) {
+        
+        if(this.running)
+            console.warn(' ! Tasker.run() called more than once.');
         
         var taskList = typeof _.last(this.tasks) === 'function' ? this.tasks.slice(0, this.tasks.length-1) : this.tasks;
         console.log('  - Tasker running', taskList.join(', '));
 
+        this.running = true;
         gulp.start.apply(gulp, taskGroup || this.tasks);
         
     };
+
+    /*
+     * ## Tasker.copyFile()
+     * 
+     * Convenience for copying files
+     * 
+     * @param {String} from file to copy (can be a wildcard)
+     * @param {String} to file to copy to (if star / wildcard ending for to, copies to all app destination paths), ex: 'js/*' means /public/sites/localhost/js/copiedfile
+     * @return {Object} Promise
+     */
+    Tasker.prototype.copyFile = function(from, to) {
+        
+        var dests = to[to.length-1] == '*' ? _.map(this.destpaths, function(d) { return d + '/' + to.substr(0,to.length-1).replace(/^\.?\//,''); }) : ( _.isArray(to) ? to : [ to ] )
+          , promises = [];
+        
+        dests.forEach(function(destpath) {
+            promises.push(new Promise(function(res, rej) {
+                mkdirp(destpath[destpath.length-1]=='/' ? destpath : pathLib.dirname(destpath), function(err) {
+                    if(!err)
+                        exec('cp ' + from + ' ' + destpath, function(err, stout, sterr) {
+                            if(err) return rej(err);
+                            else    return res(stout, sterr);
+                        });
+                });
+            }));
+        });
+        
+        return Promise.all(promises);
+    };
     
     /*
-     * Tasker.writeFile() - convenience for writing files with FS
+     * ## Tasker.writeFile()
      * 
-     * - name, string of file name
-     * - data, string
-     * - destination, string (optional) path to write file to
+     * Convenience for writing files with FS.
      * 
-     * returns a new RSVP.Promise
+     * @param {String} name of file
+     * @param {String} data to write in UTF8
+     * @param {String} destination (optional) path to write file to
+     * @param {String} fsOp designating override for fs.writeFile default (must have the same api, like 'appendFile' for fs.appendFile)
+     * @return {Object} instance of Promise
      */
-    Tasker.prototype.writeFile = function(name, data, destination) {
+    Tasker.prototype.writeFile = function(name, data, destination, fsOp) {
         
         if(!destination && (!this.destpaths || !this.destpaths.length) )
             return console.error('  ! Tasker.writeFile(), no destination paths available.');
@@ -282,11 +414,11 @@ module.exports = function(config) {
           , promises = [];
             
         _.each(dests, function(destpath) {
-            promises.push(new RSVP.Promise(function(resolve, reject) {
+            promises.push(new Promise(function(resolve, reject) {
                 var writePath = destpath + '/' + name;
                 mkdirp(pathLib.dirname(writePath), function(err) {
-                    if(err) return cb(err);
-                    fs.writeFile(writePath, data, function(err) {
+                    if(err) return reject(err);
+                    fs[fsOp || 'writeFile'](writePath, data, function(err) {
                         if(err) reject(err);
                         else    resolve(writePath);
                     });
@@ -294,7 +426,16 @@ module.exports = function(config) {
             }));
         });
         
-        return RSVP.all(promises);
+        return Promise.all(promises);
+    };
+
+    /*
+     * ## Tasker.appendFile()
+     * 
+     * 
+     */
+    Tasker.prototype.appendFile = function(name, data, destination) {
+        return this.writeFile(name, data, destination, 'appendFile');
     };
     
     return Tasker;
