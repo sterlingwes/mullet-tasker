@@ -3,6 +3,14 @@
  * 
  * A task runner and resource builder for apps & client side assets. Mainly convenience methods for gulp / dev / test related tasks.
  * 
+ * Example:
+ * ```
+ *     tasker
+ *      .add('templates', [ ['src','templates','(!includes|**)','*\.jade'].join('/') ], gulpjade)
+ *      .add('css', [ 'src','css','**','*\.less' ].join('/') , gulpless)
+ *      .compile()
+ *      .run();
+ * ```
  * @exports {Function} that returns the Tasker prototype
  */
 
