@@ -29,6 +29,8 @@ var gulp = require('gulp')
 
 module.exports = function(config) {
     
+    var _DEFAULT_LR_PORT = 9999;
+    
     /*
      * ## Tasker.constructor()
      * 
@@ -78,9 +80,10 @@ module.exports = function(config) {
      * 
      * Compiles a webpack app based on default config, and writes the bundle locally to public/sites
      * 
+     * @param {Object} opts on mainly whether to watch for file changes and recompile (opts.live boolean)
      * @return {Object} Promise
      */
-    Tasker.prototype.compileLocal = function() {
+    Tasker.prototype.compileLocal = function(opts) {
         
         var webpconfig = {
             cache:  false,
@@ -114,12 +117,38 @@ module.exports = function(config) {
             
             wpcompiler.run(function(err, stats) {
                 if(err) return rej(err);
-                res();
-            });
+                
+                if(opts && opts.live) {
+                    if(!config.isTesting) {
+                        opts.port = opts.port || _DEFAULT_LR_PORT;
+                        res();
+                        this.reload.listen(opts.port, function(err) {
+
+                            if(err) return console.error(err);
+                            console.log( '- LiveReload server listening on port ' + opts.port );
+                            
+                            console.log('- Watching webpack assets for file changes to reload');
+                            wpcompiler.watch(200, function(err, stats) {
+                                if(err) return rej(err);
+                                this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' ).then(function() {
+                                    this.reload.changed({
+                                        body: {
+                                            files:  ['/js/bundle.js']
+                                        }
+                                    });
+                                }.bind(this));
+                            }.bind(this));
+
+                        }.bind(this));
+                    }
+                }
+                else
+                    res();
+            }.bind(this));
             
-        }).then(function() {
+        }.bind(this)).then(function() {
             
-            this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' );
+            return this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' );
             
         }.bind(this));
     };
@@ -333,7 +362,7 @@ module.exports = function(config) {
      */
     Tasker.prototype.live = function(port) {
         
-        if(!port)   port = 9999;
+        if(!port)   port = _DEFAULT_LR_PORT;
         
         this.tasks.push(function(err) {
             if(err) return console.error(err);

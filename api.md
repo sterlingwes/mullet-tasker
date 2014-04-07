@@ -34,11 +34,30 @@ Instantiated by the Mullet runtime if the "owner" app is an entry app. Otherwise
 
 Compiles a webpack app based on default config, and writes the bundle locally to public/sites
 
+*	*opts* `Object` on mainly whether to watch for file changes and recompile (opts.live boolean)
 *	*returns* `Object` Promise
 
 ****
 
-);
+).then(function() {
+                                    this.reload.changed({
+                                        body: {
+                                            files:  ['/js/bundle.js']
+                                        }
+                                    });
+                                }.bind(this));
+                            }.bind(this));
+
+                        }.bind(this));
+                    }
+                }
+                else
+                    res();
+            }.bind(this));
+            
+        }.bind(this)).then(function() {
+            
+            return this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' );
             
         }.bind(this));
     };
