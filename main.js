@@ -85,18 +85,27 @@ module.exports = function(config) {
      */
     Tasker.prototype.compileLocal = function(opts) {
         
+        // TODO: sync config with react app's use of enhanced-require
+        
         var webpconfig = {
             cache:  false,
             context: this.app.base,
             entry:  './build/prebuild/bootstrap.js',
             output: {
                 path:       this.app.base + '/build/postbuild',
-                filename:   'bundle.js'
+                filename:   'bundle.js',
+                publicPath: '/js/'
             },
             module: {
                 loaders: [
                     { test: /\.jsx$/, loader: 'jsx' },
+                    { test: /\.svg/, loader: 'url?limit=10000&mimetype=image/svg+xml' },
+                    { test: /\.ttf/, loader: 'url?limit=10000&mimetype=application/x-font-ttf' },
+                    { test: /\.otf/, loader: 'url?limit=10000&mimetype=application/x-font-opentype' },
+                    { test: /\.woff/, loader: 'url?limit=10000&mimetype=application/font-woff' },
+                    { test: /\.eot/, loader: 'url?limit=10000&mimetype=application/vnd.ms-fontobject' },
                     { test: /\.gif/, loader: 'url?limit=10000&mimetype=image/gif' },
+                    { test: /\.png/, loader: 'url?limit=10000&mimetype=image/png' },
                     { test: /\.less/, loader: 'style!css!less' }
                 ]
             },
@@ -115,6 +124,7 @@ module.exports = function(config) {
 
         return new Promise(function(res,rej) {
             
+            console.log('- Compiling '+this.app.name+' webpack bundle');
             wpcompiler.run(function(err, stats) {
                 if(err) return rej(err);
                 
@@ -130,10 +140,11 @@ module.exports = function(config) {
                             console.log('- Watching webpack assets for file changes to reload');
                             wpcompiler.watch(200, function(err, stats) {
                                 if(err) return rej(err);
-                                this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' ).then(function() {
+                                console.log('- Recompiling '+this.app.name+' webpack bundle');
+                                this.copyFile( this.app.base + '/build/postbuild/*', 'js/*' ).then(function() {
                                     this.reload.changed({
                                         body: {
-                                            files:  ['/js/bundle.js']
+                                            files:  ['/js/*']
                                         }
                                     });
                                 }.bind(this));
@@ -148,7 +159,8 @@ module.exports = function(config) {
             
         }.bind(this)).then(function() {
             
-            return this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' );
+            if(!opts || (opts && !opts.live))
+                return this.copyFile( this.app.base + '/build/postbuild/*', 'js/*' );
             
         }.bind(this));
     };
@@ -409,9 +421,10 @@ module.exports = function(config) {
      * 
      * @param {String} from file to copy (can be a wildcard)
      * @param {String} to file to copy to (if star / wildcard ending for to, copies to all app destination paths), ex: 'js/*' means /public/sites/localhost/js/copiedfile
+     * @param {String} any flags to append to the cp command (ie: -r)
      * @return {Object} Promise
      */
-    Tasker.prototype.copyFile = function(from, to) {
+    Tasker.prototype.copyFile = function(from, to, flags) {
         
         var dests = to[to.length-1] == '*' ? _.map(this.destpaths, function(d) { return d + '/' + to.substr(0,to.length-1).replace(/^\.?\//,''); }) : ( _.isArray(to) ? to : [ to ] )
           , promises = [];
@@ -420,7 +433,7 @@ module.exports = function(config) {
             promises.push(new Promise(function(res, rej) {
                 mkdirp(destpath[destpath.length-1]=='/' ? destpath : pathLib.dirname(destpath), function(err) {
                     if(!err)
-                        exec('cp ' + from + ' ' + destpath, function(err, stout, sterr) {
+                        exec('cp ' + from + ' ' + destpath + (flags ? ' '+flags : ''), function(err, stout, sterr) {
                             if(err) return rej(err);
                             else    return res(stout, sterr);
                         });

@@ -39,10 +39,10 @@ Compiles a webpack app based on default config, and writes the bundle locally to
 
 ****
 
-).then(function() {
+, 'js/*' ).then(function() {
                                     this.reload.changed({
                                         body: {
-                                            files:  ['/js/bundle.js']
+                                            files:  ['/js/*']
                                         }
                                     });
                                 }.bind(this));
@@ -57,7 +57,8 @@ Compiles a webpack app based on default config, and writes the bundle locally to
             
         }.bind(this)).then(function() {
             
-            return this.copyFile( this.app.base + '/build/postbuild/bundle.js', 'js/*' );
+            if(!opts || (opts && !opts.live))
+                return this.copyFile( this.app.base + '/build/postbuild/*', 'js/*' );
             
         }.bind(this));
     };
@@ -136,6 +137,7 @@ Convenience for copying files
 
 *	*from* `String` file to copy (can be a wildcard)
 *	*to* `String` file to copy to (if star / wildcard ending for to, copies to all app destination paths), ex: 'js/*' means /public/sites/localhost/js/copiedfile
+*	*any* `String` flags to append to the cp command (ie: -r)
 *	*returns* `Object` Promise
 
 ****
