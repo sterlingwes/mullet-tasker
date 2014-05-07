@@ -114,9 +114,10 @@ module.exports = function(config) {
                 alias: {
                     libs:       'D:/Dev/Vagrant/mulletapp/libs',
                     reactjs:    'D:/Dev/Vagrant/mulletapp/node_modules/react/react.js',
-                    fs:         'D:/Dev/Vagrant/mulletapp/libs/fsblock'
+                    fs:         'D:/Dev/Vagrant/mulletapp/libs/fsblock',
+                    apps:       'D:/Dev/Vagrant/mulletapp/apps'
                 },
-                modulesDirectories: ['bower_components', 'node_modules', 'apps']
+                modulesDirectories: ['bower_components', 'node_modules']
             }
         };
 
