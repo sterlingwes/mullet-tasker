@@ -40,20 +40,22 @@ Compiles a webpack app based on default config, and writes the bundle locally to
 ****
 
 , 'js/*' ).then(function() {
-                                    this.reload.changed({
-                                        body: {
-                                            files:  ['/js/*']
-                                        }
-                                    });
-                                }.bind(this));
+                                this.reload.changed({
+                                    body: {
+                                        files:  ['/js/*']
+                                    }
+                                });
                             }.bind(this));
-
                         }.bind(this));
-                    }
+
+                    }.bind(this));
                 }
-                else
+            }
+            else
+                wpcompiler.run(function(err, stats) {
+                    if(err) return rej(err);
                     res();
-            }.bind(this));
+                }.bind(this));
             
         }.bind(this)).then(function() {
             

@@ -126,37 +126,37 @@ module.exports = function(config) {
         return new Promise(function(res,rej) {
             
             console.log('- Compiling '+this.app.name+' webpack bundle');
-            wpcompiler.run(function(err, stats) {
-                if(err) return rej(err);
-                
-                if(opts && opts.live) {
-                    if(!config.isTesting) {
-                        opts.port = opts.port || _DEFAULT_LR_PORT;
-                        res();
-                        this.reload.listen(opts.port, function(err) {
-
-                            if(err) return console.error(err);
-                            console.log( '- LiveReload server listening on port ' + opts.port );
-                            
-                            console.log('- Watching webpack assets for file changes to reload');
-                            wpcompiler.watch(200, function(err, stats) {
-                                if(err) return rej(err);
-                                console.log('- Recompiling '+this.app.name+' webpack bundle');
-                                this.copyFile( this.app.base + '/build/postbuild/*', 'js/*' ).then(function() {
-                                    this.reload.changed({
-                                        body: {
-                                            files:  ['/js/*']
-                                        }
-                                    });
-                                }.bind(this));
-                            }.bind(this));
-
-                        }.bind(this));
-                    }
-                }
-                else
+            
+            if(opts && opts.live) {
+                if(!config.isTesting) {
+                    opts.port = opts.port || _DEFAULT_LR_PORT;
                     res();
-            }.bind(this));
+                    this.reload.listen(opts.port, function(err) {
+
+                        if(err) return console.error(err);
+                        console.log( '- LiveReload server listening on port ' + opts.port );
+                        
+                        console.log('- Watching webpack assets for file changes to reload');
+                        wpcompiler.watch(200, function(err, stats) {
+                            if(err) return rej(err);
+                            console.log('- Recompiling '+this.app.name+' webpack bundle');
+                            this.copyFile( this.app.base + '/build/postbuild/*', 'js/*' ).then(function() {
+                                this.reload.changed({
+                                    body: {
+                                        files:  ['/js/*']
+                                    }
+                                });
+                            }.bind(this));
+                        }.bind(this));
+
+                    }.bind(this));
+                }
+            }
+            else
+                wpcompiler.run(function(err, stats) {
+                    if(err) return rej(err);
+                    res();
+                }.bind(this));
             
         }.bind(this)).then(function() {
             
